@@ -1,0 +1,524 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>おはじきバトル</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#20242a;color:white;text-align:center;font-family:Arial,sans-serif}
+h1{font-size:25px;margin:12px}
+button,select{padding:9px;margin:3px;border:0;border-radius:7px;font-weight:bold}
+button{background:#168cff;color:white;cursor:pointer}
+button:disabled{opacity:.4;cursor:default}
+.hand.selected{outline:2px solid white;background:#087044}
+.ability.selected{outline:2px solid #fff;background:#8a3ffc}
+#abilityStatus{font-size:13px;color:#d8c8ff;margin:4px}
+#status{color:#ffe49b;min-height:30px;margin:8px}
+#game{position:relative;width:900px;max-width:96vw;height:600px;max-height:70vh;min-height:360px;margin:8px auto;overflow:hidden;border:8px solid #654321;border-radius:6px;background:#d6ad70;touch-action:none}
+.half{position:absolute;top:0;width:50%;height:100%;pointer-events:none}
+#left{left:0;background:linear-gradient(135deg,#f0d09b,#d6ad70)}
+#right{right:0;background:linear-gradient(135deg,#f0d09b,#d6ad70)}
+#mid{position:absolute;left:50%;height:100%;width:5px;background:#654321;transform:translateX(-50%);pointer-events:none}
+.bounce{position:absolute;left:32.5%;width:35%;height:6px;background:#168cff;z-index:2;pointer-events:none}
+#top{top:0}
+#bottom{bottom:0}
+#bottle{position:absolute;left:50%;top:50%;width:70px;height:70px;transform:translate(-50%,-50%);border:4px solid #4685a0;border-radius:50%;background:radial-gradient(circle at 32% 25%,#f4ffff 0%,#b9edff 24%,#70c9eb 55%,#2582b3 82%,#15577e 100%);box-shadow:inset -5px -7px 10px #003c6544,inset 4px 4px 8px #fff9,0 4px 10px #0004;z-index:3;pointer-events:none}
+#piece{position:absolute;width:46px;height:46px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#aaa,#555 35%,#222 70%);border:3px solid #111;box-shadow:0 4px 8px #0008;z-index:8;transform:translate(-50%,-50%);touch-action:none}
+#aim{position:absolute;height:4px;background:#ff5555;transform-origin:0 50%;display:none;z-index:7;pointer-events:none}
+.ob{position:absolute;z-index:6;transform:translate(-50%,-50%);touch-action:none;display:none;cursor:move;user-select:none}
+.ob.long{width:120px;height:40px;border-radius:5px}
+.ob.short{width:92px;height:30px;border-radius:4px}
+.ob.player{background:linear-gradient(#ffd778,#b87525);border:3px solid #75420c}
+.ob.ai{background:linear-gradient(#8ce7ff,#1677d4);border:3px solid #064c91}
+.ob.active{outline:3px solid #4cff88}
+.ob.invalid{outline:3px solid #ff4242}
+#power{position:absolute;left:10px;bottom:10px;width:180px;height:14px;background:#333;border:2px solid white;border-radius:10px;overflow:hidden;z-index:9;pointer-events:none}
+#powerbar{height:100%;width:0;background:linear-gradient(90deg,#4caf50,#ffeb3b,#ff5722)}
+#result{display:none;position:absolute;z-index:20;left:50%;top:50%;transform:translate(-50%,-50%);background:#171a1f;padding:25px;border-radius:16px;border:3px solid white;min-width:250px}
+#resultTitle{font-size:23px;font-weight:bold;margin-bottom:15px}
+#controls{margin:6px}
+#help{font-size:13px;color:#ddd;line-height:1.6;margin:8px}
+#aiThought{max-width:900px;margin:8px auto;padding:10px 14px;text-align:left;background:#171b21;border:1px solid #52616f;border-radius:10px;font-size:13px;line-height:1.55}
+#aiThought strong{color:#8ce7ff}#aiThought ul{margin:5px 0 0;padding-left:20px}#aiThought .muted{color:#b7c0ca}
+@media(max-width:600px){h1{font-size:20px}#game{max-height:65vh}button{padding:7px;font-size:12px}}
+</style>
+</head>
+<body>
+<h1>🪙 おはじきバトル</h1>
+<div>ターン：<b id="turn">あなた</b>　残りはじき：<b id="shots">3</b></div>
+<div id="status">キャップを後ろに引っ張って離してください。</div>
+<div>AIの強さ：
+<select id="difficulty">
+<option value="easy">初級</option>
+<option value="normal" selected>中級</option>
+<option value="hard">上級</option>
+</select></div>
+<div>使用する手：
+<button class="hand selected" data-hand="right">👉 右手</button>
+<button class="hand" data-hand="left">👈 左手</button>
+<button class="hand" data-hand="none">✋ ストレート</button></div>
+<div id="abilities">必殺技： <button id="passWall" class="ability">🌀 壁すり抜け（1回）</button><button id="bigAttack" class="ability">💥 大アタック（3ターンごと）</button><div id="abilityStatus">壁すり抜け：使用可能 ／ 大アタック：使用可能</div></div>
+<div id="controls">障害物：<span id="count">あなた 0/2　AI 0/2</span><br>
+<button id="pickShort" disabled>小さい長方形</button>
+<button id="pickLong" disabled>長い長方形</button>
+<button id="rotate" disabled>15°回転</button>
+<button id="confirm" disabled>配置を確定</button></div>
+<div id="game">
+<div id="left" class="half"></div>
+<div id="right" class="half"></div>
+<div id="mid"></div>
+<div id="top" class="bounce"></div>
+<div id="bottom" class="bounce"></div>
+<div id="bottle"></div>
+<div id="aim"></div>
+<div id="piece"></div>
+<div id="power"><div id="powerbar"></div></div>
+<div id="result"><div id="resultTitle"></div><button onclick="location.reload()">もう一度遊ぶ</button></div>
+</div>
+<div id="aiThought"><strong>🧠 AIの思考ログ</strong><div id="aiThoughtMain" class="muted">AIが考えた進路・隙間・力加減がここに表示されます。</div><ul id="aiThoughtList"><li>AIのターンになると分析結果を表示します。</li></ul></div>
+<div id="help">左側があなた、右側がAIです。キャップを引っ張って弾きます。障害物は中央の青い範囲内に配置できます。障害物の角付近をドラッグすると回転します。</div>
+<script src="ai.js"></script>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const game=$("game"),piece=$("piece"),aim=$("aim");
+const status=$("status"),turnLabel=$("turn"),shotsLabel=$("shots"),powerbar=$("powerbar");
+const R=23,BR=35,MAX_PULL=180,POWER_SCALE=.036,FRICTION=.986,STOP_SPEED=.055,BOUNCE=.78;
+let x=0,y=0,vx=0,vy=0,spin=0,spinV=0,hand="right",shots=3;
+let side="left",moving=false,dragging=false,gameOver=false,aiBusy=false,placing=false,selected=null,aiTimer=null,lastTime=0;
+let selectedAbility="none",wallPassUsed=false,bigAttackCooldown=0,shotAbility="none",passedObstacleId=null,firstObstacleHit=false;
+const obstacles=[
+{id:"pS",owner:"left",shape:"short",w:92,h:30,x:0,y:0,angle:0,placed:false},
+{id:"pL",owner:"left",shape:"long",w:120,h:40,x:0,y:0,angle:0,placed:false},
+{id:"aS",owner:"right",shape:"short",w:92,h:30,x:0,y:0,angle:0,placed:false},
+{id:"aL",owner:"right",shape:"long",w:120,h:40,x:0,y:0,angle:0,placed:false}
+];
+for(const o of obstacles){
+ o.el=document.createElement("div");
+ o.el.className="ob "+o.shape+" "+(o.owner==="left"?"player":"ai");
+ o.el.setAttribute("aria-label",o.owner==="left"?"あなたの障害物":"AIの障害物");
+ game.appendChild(o.el);
+ o.el.addEventListener("pointerdown",e=>obstacleDown(e,o));
+}
+function size(){return{w:game.clientWidth,h:game.clientHeight}}
+function bounds(){const{w,h}=size();return{left:w*.325,right:w*.675,top:7,bottom:h-7}}
+function drawPiece(){piece.style.left=x+"px";piece.style.top=y+"px";piece.style.transform=`translate(-50%,-50%) rotate(${spin}deg)`}
+function corners(o,ox=o.x,oy=o.y,ang=o.angle){
+ const a=ang*Math.PI/180,c=Math.cos(a),s=Math.sin(a);
+ return[[-o.w/2,-o.h/2],[o.w/2,-o.h/2],[o.w/2,o.h/2],[-o.w/2,o.h/2]].map(([px,py])=>({x:ox+px*c-py*s,y:oy+px*s+py*c}));
+}
+function circleRect(px,py,o,r=R){
+ const a=-o.angle*Math.PI/180,c=Math.cos(a),s=Math.sin(a),dx=px-o.x,dy=py-o.y;
+ const lx=dx*c-dy*s,ly=dx*s+dy*c;
+ const qx=Math.max(-o.w/2,Math.min(lx,o.w/2)),qy=Math.max(-o.h/2,Math.min(ly,o.h/2));
+ return(lx-qx)**2+(ly-qy)**2<r*r;
+}
+function polygonCircle(poly,cx,cy,r){
+ let inside=false;
+ for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+  const a=poly[i],b=poly[j];
+  if(((a.y>cy)!==(b.y>cy))&&cx<(b.x-a.x)*(cy-a.y)/(b.y-a.y)+a.x)inside=!inside;
+ }
+ if(inside)return true;
+ for(let i=0;i<poly.length;i++){
+  const a=poly[i],b=poly[(i+1)%poly.length],dx=b.x-a.x,dy=b.y-a.y;
+  const t=Math.max(0,Math.min(1,((cx-a.x)*dx+(cy-a.y)*dy)/(dx*dx+dy*dy||1)));
+  if((a.x+t*dx-cx)**2+(a.y+t*dy-cy)**2<r*r)return true;
+ }
+ return false;
+}
+function overlap(a,b){
+ return polygonCircle(corners(a),b.x,b.y,Math.max(b.w,b.h)/2)||polygonCircle(corners(b),a.x,a.y,Math.max(a.w,a.h)/2);
+}
+function valid(o,ox=o.x,oy=o.y,ang=o.angle){
+ const{w,h}=size(),L=bounds(),tmp={...o,x:ox,y:oy,angle:ang},poly=corners(tmp);
+ // 配置できるのは、左右の青い境界の間。境界線自体は描画しない。
+ if(!poly.every(p=>p.x>=L.left&&p.x<=L.right&&p.y>=3&&p.y<=h-3))return false;
+ // 水筒、キャップ、ほかの障害物との重なりを禁止
+ if(polygonCircle(poly,w/2,h/2,BR))return false;
+ if(circleRect(x,y,tmp))return false;
+ for(const q of obstacles)if(q!==o&&q.placed&&overlap(tmp,q))return false;
+ return true;
+}
+function updateAbilityUI(){
+ const pass=$("passWall"),big=$("bigAttack");
+ pass.classList.toggle("selected",selectedAbility==="pass");
+ big.classList.toggle("selected",selectedAbility==="big");
+ pass.disabled=side!=="left"||moving||placing||gameOver||aiBusy||wallPassUsed;
+ big.disabled=side!=="left"||moving||placing||gameOver||aiBusy||bigAttackCooldown>0;
+ $("abilityStatus").textContent=`壁すり抜け：${wallPassUsed?"使用済み":"使用可能"} ／ 大アタック：${bigAttackCooldown>0?`あと${bigAttackCooldown}ターン`:"使用可能"}`;
+}
+$("passWall").onclick=()=>{if(wallPassUsed||side!=="left"||moving||placing||gameOver||aiBusy)return;selectedAbility=selectedAbility==="pass"?"none":"pass";updateAbilityUI();status.textContent=selectedAbility==="pass"?"壁すり抜けを選択中。このショットで壁を1枚すり抜けます。":"必殺技の選択を解除しました。"};
+$("bigAttack").onclick=()=>{if(bigAttackCooldown>0||side!=="left"||moving||placing||gameOver||aiBusy)return;selectedAbility=selectedAbility==="big"?"none":"big";updateAbilityUI();status.textContent=selectedAbility==="big"?"大アタックを選択中。最初に当たった壁を押し出します。":"必殺技の選択を解除しました。"};
+function drawObstacles(){
+ for(const o of obstacles){
+  o.el.style.left=o.x+"px";o.el.style.top=o.y+"px";
+  o.el.style.transform=`translate(-50%,-50%) rotate(${o.angle}deg)`;
+  o.el.style.display=o.placed||selected===o?"block":"none";
+  o.el.classList.toggle("active",placing&&selected===o);
+  o.el.classList.toggle("invalid",placing&&selected===o&&!valid(o));
+ }
+ $("count").textContent=`あなた ${obstacles.filter(o=>o.owner==="left"&&o.placed).length}/2　AI ${obstacles.filter(o=>o.owner==="right"&&o.placed).length}/2`;
+ const own=obstacles.filter(o=>o.owner===side);
+ const next=own.find(o=>!o.placed);
+ $("pickShort").disabled=!placing||!!(next&&next.shape!=="short");
+ $("pickLong").disabled=!placing||!!(next&&next.shape!=="long");
+ $("rotate").disabled=!placing||!selected;
+ updateAbilityUI();
+ $("confirm").disabled=!placing||!selected;
+}
+function selectObstacle(o){
+ if(!placing||o.owner!==side)return;
+ const own=obstacles.filter(q=>q.owner===side),next=own.find(q=>!q.placed);
+ if(next&&o!==next)return;
+ selected=o;
+ if(!o.placed){
+  const{w,h}=size(),L=bounds();
+  o.x=(L.left+L.right)/2;
+  o.y=o.shape==="short"?h*.35:h*.65;
+  o.angle=0;
+  // 初期位置が水筒に近い場合、左右へ少しずつ探す
+  if(!valid(o)){
+   let found=false;
+   for(let yy=h*.2;yy<h*.85&&!found;yy+=12){
+    for(let xx=L.left+o.w/2;xx<=L.right-o.w/2;xx+=12){
+     if(valid(o,xx,yy,0)){o.x=xx;o.y=yy;found=true;break}
+    }
+   }
+  }
+ }
+ drawObstacles();
+}
+$("pickShort").onclick=()=>selectObstacle(obstacles.find(o=>o.owner===side&&o.shape==="short"));
+$("pickLong").onclick=()=>selectObstacle(obstacles.find(o=>o.owner===side&&o.shape==="long"));
+$("rotate").onclick=()=>{
+ if(!selected)return;
+ selected.angle=(selected.angle+15)%360;
+ drawObstacles();
+ status.textContent=valid(selected)?"角度を変更しました。":"ここは置けませんよー笑 😂";
+};
+function beginPlacement(owner){
+ if(gameOver)return;
+ side=owner;placing=true;selected=null;
+ const own=obstacles.filter(o=>o.owner===owner),next=own.find(o=>!o.placed);
+ if(next)selectObstacle(next);
+ drawObstacles();
+ status.textContent=next?(next.shape==="short"?"小さい長方形を配置してください。":"長い長方形を配置してください。"):"再配置する障害物を選んでください。";
+}
+function confirmPlacement(){
+ if(!placing||!selected)return;
+ if(!valid(selected)){
+  status.textContent="ここは置けませんよー笑 😂 別の位置にしてください。";
+  drawObstacles();return;
+ }
+ selected.placed=true;
+ placing=false;selected=null;
+ drawObstacles();
+ if(side==="left")scheduleAI();
+ else playerTurn();
+}
+$("confirm").onclick=confirmPlacement;
+function obstacleDown(e,o){
+ if(!placing||o.owner!==side||moving||gameOver)return;
+ const own=obstacles.filter(q=>q.owner===side),next=own.find(q=>!q.placed);
+ if(next&&o!==next)return;
+ e.preventDefault();
+ if(selected!==o)selectObstacle(o);
+ selected=o;
+ const rect=game.getBoundingClientRect();
+ const cx=rect.left+o.x,cy=rect.top+o.y;
+ const cs=corners(o);
+ // 回転判定を角の近く14px以内に限定。角から離れた場所では必ず移動する
+ const ROTATE_HANDLE_RADIUS=14;
+ const rotating=cs.some(p=>Math.hypot(e.clientX-(rect.left+p.x),e.clientY-(rect.top+p.y))<=ROTATE_HANDLE_RADIUS);
+ const startAngle=Math.atan2(e.clientY-cy,e.clientX-cx);
+ const initialAngle=o.angle,ox=o.x,oy=o.y;
+ const startX=e.clientX,startY=e.clientY;
+ try{o.el.setPointerCapture(e.pointerId)}catch{}
+ function move(ev){
+  const rr=game.getBoundingClientRect();
+  if(rotating){
+   const now=Math.atan2(ev.clientY-(rr.top+oy),ev.clientX-(rr.left+ox));
+   o.angle=(initialAngle+(now-startAngle)*180/Math.PI+360)%360;
+  }else{
+   o.x=ox+(ev.clientX-startX);o.y=oy+(ev.clientY-startY);
+  }
+  drawObstacles();
+ }
+ function up(){
+  o.el.removeEventListener("pointermove",move);
+  o.el.removeEventListener("pointerup",up);
+  o.el.removeEventListener("pointercancel",up);
+  status.textContent=valid(o)?"位置を確認して「配置を確定」を押してください。":"ここは置けませんよー笑 😂";
+  drawObstacles();
+ }
+ o.el.addEventListener("pointermove",move);
+ o.el.addEventListener("pointerup",up);
+ o.el.addEventListener("pointercancel",up);
+}
+function setHand(v){
+ if(moving||dragging||placing||gameOver||side!=="left"||aiBusy)return;
+ hand=v;
+ document.querySelectorAll(".hand").forEach(b=>b.classList.toggle("selected",b.dataset.hand===v));
+}
+document.querySelectorAll(".hand").forEach(b=>b.onclick=()=>setHand(b.dataset.hand));
+function controls(on){document.querySelectorAll(".hand").forEach(b=>b.disabled=!on)}
+function startDrag(e){
+ if(e.button!==0||moving||dragging||gameOver||placing||side!=="left"||aiBusy)return;
+ dragging=true;
+ try{piece.setPointerCapture(e.pointerId)}catch{}
+ aim.style.display="block";updateAim(e);
+}
+function updateAim(e){
+ if(!dragging)return;
+ const r=game.getBoundingClientRect(),dx=x-(e.clientX-r.left),dy=y-(e.clientY-r.top),d=Math.min(Math.hypot(dx,dy),MAX_PULL);
+ aim.style.left=x+"px";aim.style.top=y+"px";aim.style.width=d+"px";
+ aim.style.transform=`rotate(${Math.atan2(dy,dx)}rad)`;
+ powerbar.style.width=d/MAX_PULL*100+"%";
+}
+function endDrag(e){
+ if(!dragging)return;
+ dragging=false;
+ if(moving||gameOver||side!=="left"||aiBusy)return;
+ aim.style.display="none";powerbar.style.width="0";
+ const r=game.getBoundingClientRect();
+ let dx=x-(e.clientX-r.left),dy=y-(e.clientY-r.top),d=Math.min(Math.hypot(dx,dy),MAX_PULL);
+ if(d<10){status.textContent="もう少し引っ張ってください。";return}
+ const len=Math.hypot(dx,dy);
+ shotAbility=selectedAbility;
+ if(shotAbility==="pass")wallPassUsed=true;
+ if(shotAbility==="big")bigAttackCooldown=3;
+ selectedAbility="none";passedObstacleId=null;firstObstacleHit=false;obstacles.forEach(o=>o.passExited=false);updateAbilityUI();
+ vx=dx/len*d*POWER_SCALE;vy=dy/len*d*POWER_SCALE;
+ spinV=(hand==="right"?1:hand==="left"?-1:0)*(d/MAX_PULL)*3;
+ shots--;shotsLabel.textContent=shots;controls(false);startMotion();
+}
+function startMotion(){moving=true;lastTime=performance.now();requestAnimationFrame(loop)}
+function loop(t){
+ if(!moving)return;
+ const dt=Math.min((t-lastTime)/16.67,1.5);lastTime=t;
+ x+=vx*dt;y+=vy*dt;
+ const curve=spinV*.0022,ox=vx,oy=vy;
+ vx+=-oy*curve*dt;vy+=ox*curve*dt;
+ vx*=Math.pow(FRICTION,dt);vy*=Math.pow(FRICTION,dt);
+ spinV*=Math.pow(.985,dt);spin+=spinV*dt;
+ const{w,h}=size(),L=bounds();
+ if(x<-R/2||x>w+R/2||y<-R/2||y>h+R/2){
+  moving=false;drawPiece();finish("落下");return;
+ }
+ if((y<=R||y>=h-R)&&x>=L.left&&x<=L.right){
+  if(y<=R){y=R;vy=Math.abs(vy)*.68}
+  else{y=h-R;vy=-Math.abs(vy)*.68}
+ }
+ hitBottle();
+ for(const o of obstacles)if(o.placed){
+  if(o.flying)continue;
+  if(shotAbility==="pass"&&passedObstacleId===null&&circleRect(x,y,o)){
+   passedObstacleId=o.id;status.textContent="壁すり抜け発動！この壁は通過しました。以後、この壁は通常どおり当たります！";continue;
+  }
+  // すり抜けを許可するのは、最初に選ばれた壁を通過している間だけ。
+  // 同じ壁に戻って当たった場合は通常の衝突にする。
+  if(shotAbility==="pass"&&passedObstacleId===o.id&&circleRect(x,y,o)&&!o.passExited)continue;
+  if(shotAbility==="pass"&&passedObstacleId===o.id&&!circleRect(x,y,o))o.passExited=true;
+  hitObstacle(o);
+ }
+ updateFlyingObstacles(dt);
+ hitFlyingObstacles();
+ drawPiece();
+ if(Math.hypot(vx,vy)<STOP_SPEED){
+  vx=vy=spinV=0;moving=false;endShot();return;
+ }
+ requestAnimationFrame(loop);
+}
+function hitBottle(){
+  const{w,h}=size(),dx=x-w/2,dy=y-h/2,d=Math.hypot(dx,dy),minDist=R+BR;
+  if(d>=minDist)return;
+  const nx=dx/(d||1),ny=dy/(d||1);
+  x=w/2+nx*(minDist+.2);y=h/2+ny*(minDist+.2);
+  const dot=vx*nx+vy*ny;
+  if(dot<0){vx=(vx-2*dot*nx)*.72;vy=(vy-2*dot*ny)*.72}
+}
+function hitObstacle(o){
+ const a=-o.angle*Math.PI/180,c=Math.cos(a),s=Math.sin(a),dx=x-o.x,dy=y-o.y;
+ const lx=dx*c-dy*s,ly=dx*s+dy*c;
+ const qx=Math.max(-o.w/2,Math.min(lx,o.w/2)),qy=Math.max(-o.h/2,Math.min(ly,o.h/2));
+ let nx=lx-qx,ny=ly-qy,d=Math.hypot(nx,ny);
+ if(d>=R)return;
+ if(shotAbility==="big"&&!firstObstacleHit){
+  firstObstacleHit=true;
+  const speed=Math.hypot(vx,vy)||1;
+  // 壁に強い衝撃を与え、物理的に飛ばす。
+  o.flying=true;o.flyVx=(vx/speed)*13.5;o.flyVy=(vy/speed)*13.5;o.flySpin=(Math.random()-.5)*18;
+  o.el.style.zIndex="20";o.el.style.filter="drop-shadow(0 0 12px #ff7b22)";
+  status.textContent="💥 大アタック！！壁が衝撃で吹っ飛んだ！";
+ }
+ if(d<.001){
+  nx=Math.abs(lx/o.w)>Math.abs(ly/o.h)?Math.sign(lx||1):0;
+  ny=nx?0:Math.sign(ly||1);d=1;
+ }
+ nx/=d;ny/=d;
+ const push=R-d+.2,nlx=lx+nx*push,nly=ly+ny*push;
+ x=o.x+nlx*c+nly*s;y=o.y-nlx*s+nly*c;
+ let lvx=vx*c-vy*s,lvy=vx*s+vy*c,dot=lvx*nx+lvy*ny;
+ if(dot<0){
+  lvx-=(1+BOUNCE)*dot*nx;lvy-=(1+BOUNCE)*dot*ny;
+  vx=lvx*c+lvy*s;vy=-lvx*s+lvy*c;
+  if(shotAbility==="big"&&firstObstacleHit){vx*=1.65;vy*=1.65;}
+ }
+}
+
+function hitFlyingObstacles(){
+ // 大アタックで飛んでいる障害物にも、キャップとの当たり判定を残す。
+ for(const o of obstacles){
+  if(!o.placed||!o.flying||!circleRect(x,y,o,R))continue;
+  const a=-o.angle*Math.PI/180,c=Math.cos(a),s=Math.sin(a),dx=x-o.x,dy=y-o.y;
+  const lx=dx*c-dy*s,ly=dx*s+dy*c;
+  const qx=Math.max(-o.w/2,Math.min(lx,o.w/2)),qy=Math.max(-o.h/2,Math.min(ly,o.h/2));
+  let nx=lx-qx,ny=ly-qy,d=Math.hypot(nx,ny);
+  if(d<.001){nx=lx/(Math.hypot(lx,ly)||1);ny=ly/(Math.hypot(lx,ly)||1);d=1}
+  nx/=d;ny/=d;
+  // 押し戻して重なりを解消し、飛んでいる壁の速度も衝突に反映する。
+  const push=R-d+.8;
+  x+= (nx*c-ny*s)*push; y+= (nx*s+ny*c)*push;
+  const ovx=o.flyVx,ovy=o.flyVy,relx=vx-ovx,rely=vy-ovy,dot=relx*(nx*c-ny*s)+rely*(nx*s+ny*c);
+  if(dot<0){
+   const cnx=nx*c-ny*s,cny=nx*s+ny*c;
+   vx-=1.65*dot*cnx;vy-=1.65*dot*cny;
+   o.flyVx*=.72;o.flyVy*=.72;
+  }
+  status.textContent="💥 飛んできた障害物がキャップに命中！当たり判定が発生しました。";
+ }
+}
+
+function updateFlyingObstacles(dt){
+ let changed=false;
+ const {w,h}=size();
+ for(const o of obstacles){
+  if(!o.placed||!o.flying)continue;
+  o.x+=o.flyVx*dt;o.y+=o.flyVy*dt;o.angle+=o.flySpin*dt;
+  o.flyVx*=Math.pow(.965,dt);o.flyVy*=Math.pow(.965,dt);o.flySpin*=Math.pow(.96,dt);
+  // 回転した障害物の四隅まで含めて、机の外に完全に出たか判定する。
+  // 完全に外へ出た障害物は盤面から消え、次の配置ターンで再配置可能になる。
+  const halfDiagonal=Math.hypot(o.w/2,o.h/2);
+  if(o.x+halfDiagonal<0 || o.x-halfDiagonal>w || o.y+halfDiagonal<0 || o.y-halfDiagonal>h){
+   o.placed=false;o.flying=false;o.flyVx=0;o.flyVy=0;o.flySpin=0;
+   o.el.style.filter="";o.el.style.zIndex="";
+   status.textContent="💨 障害物が机の外へ完全に飛び出した！壁がなくなり、再配置できるようになりました。";
+  }
+  changed=true;
+ }
+ if(changed)drawObstacles();
+}
+function endShot(){
+ if(bigAttackCooldown>0)bigAttackCooldown=Math.max(0,bigAttackCooldown-1);
+ updateAbilityUI();
+ const landed=x>size().w/2?"right":"left";
+ if(landed!==side){
+  shots=3;shotsLabel.textContent=shots;
+  if(side==="left"){
+   side="right";turnLabel.textContent="AI";
+   beginPlacement("left");
+  }else{
+   side="left";turnLabel.textContent="あなた";
+   aiPlaceObstacle();playerTurn();
+  }
+  return;
+ }
+ if(shots<=0){finish(side==="left"?"AIの勝ち":"あなたの勝ち");return}
+ if(side==="left"){
+  playerTurn();status.textContent="残り"+shots+"回。もう一度弾けます。";
+ }else scheduleAI();
+}
+function scheduleAI(){
+ if(gameOver)return;
+ side="right";aiBusy=true;turnLabel.textContent="AI";
+ status.textContent="AIが考えています…";
+ if(aiTimer)clearTimeout(aiTimer);
+ aiTimer=setTimeout(aiShot,500);
+}
+function aiShot(){
+ if(gameOver||side!=="right")return;
+ aiBusy=true;shots--;shotsLabel.textContent=shots;
+ const{w,h}=size();
+ const ctx={
+  w,h,x,y,R,POWER_SCALE,FRICTION,STOP_SPEED,
+  difficulty:$("difficulty").value,
+  obstacles:obstacles.filter(o=>o.placed).map(o=>({...o}))
+ };
+ let c=window.OhajikiAI&&window.OhajikiAI.chooseShot(ctx);
+ if(!c)c={angle:Math.PI,pull:120,hand:"none",thought:{lines:["安全な進路を確定できず、基本ショットを選びました。"],routes:0,gaps:0,score:0}};
+ const thought=c.thought||{};
+ $("aiThoughtMain").textContent=`分析完了：${thought.routes??"複数"}個の進路候補を比較。選択した角度 ${Math.round(c.angle*180/Math.PI)}°、引く強さ ${Math.round(c.pull)}。`;
+ $("aiThoughtList").innerHTML="";
+ const lines=thought.lines||["候補の軌道をシミュレーションしてショットを選択しました。"];
+ for(const line of lines){const li=document.createElement("li");li.textContent=line;$("aiThoughtList").appendChild(li)}
+ vx=Math.cos(c.angle)*c.pull*POWER_SCALE;
+ vy=Math.sin(c.angle)*c.pull*POWER_SCALE;
+ spinV=0;controls(false);status.textContent="AIが進路と力加減を決めて弾きました！";startMotion();
+}
+function aiPlaceObstacle(){
+ const own=obstacles.filter(o=>o.owner==="right");
+ const next=own.find(o=>!o.placed);
+ const o=next||own[Math.random()<.5?0:1];
+ const{w,h}=size(),L=bounds();
+ const candidates=[];
+ // 水筒の近くやキャップの位置、既存の壁を避け、中央の配置エリア内で候補を作る
+ for(let yy=45;yy<h-45;yy+=22){
+  for(let xx=L.left+o.w/2+3;xx<=L.right-o.w/2-3;xx+=18){
+   for(const angle of [0,25,-25,45,-45,70,-70,90]){
+    if(!valid(o,xx,yy,angle))continue;
+    const distPiece=Math.hypot(xx-x,yy-y);
+    const distBottle=Math.hypot(xx-w/2,yy-h/2);
+    let score=distPiece*.6+distBottle*.15+Math.random()*20;
+    // キャップの進行先を塞ぎやすい位置を少し優先
+    if(x>w/2)score+=Math.abs(xx-x)*.15;
+    candidates.push({x:xx,y:yy,angle,score});
+   }
+  }
+ }
+ if(candidates.length){
+  candidates.sort((a,b)=>b.score-a.score);
+  const choice=candidates[Math.floor(Math.random()*Math.min(8,candidates.length))];
+  o.x=choice.x;o.y=choice.y;o.angle=choice.angle;o.placed=true;
+ }else if(next){
+  // 配置可能な位置を少しずつ探す
+  let found=false;
+  for(let yy=40;yy<h-40&&!found;yy+=12){
+   for(let xx=L.left+o.w/2+2;xx<=L.right-o.w/2-2;xx+=12){
+    if(valid(o,xx,yy,0)){o.x=xx;o.y=yy;o.angle=0;o.placed=true;found=true;break}
+   }
+  }
+ }
+ drawObstacles();
+}
+function playerTurn(){
+ side="left";aiBusy=false;placing=false;selected=null;
+ turnLabel.textContent="あなた";controls(true);drawObstacles();
+ status.textContent="あなたのターンです。キャップを弾いてください。";updateAbilityUI();
+}
+function finish(message){
+ gameOver=true;moving=false;dragging=false;aiBusy=false;placing=false;
+ if(aiTimer)clearTimeout(aiTimer);
+ $("resultTitle").textContent=message==="あなたの勝ち"?"🎉 あなたの勝ち！":message==="AIの勝ち"?"🤖 AIの勝ち！":"ゲーム終了";
+ $("help").textContent=message==="落下"?"キャップが机から落ちました。":"3回以内に相手陣地へ入れられませんでした。";
+ $("result").style.display="block";status.textContent=message;
+}
+piece.addEventListener("pointerdown",startDrag);
+piece.addEventListener("pointermove",updateAim);
+piece.addEventListener("pointerup",endDrag);
+piece.addEventListener("pointercancel",()=>{dragging=false;aim.style.display="none";powerbar.style.width="0"});
+window.addEventListener("resize",()=>{
+ const{w,h}=size();
+ x=Math.max(R,Math.min(w-R,x));y=Math.max(R,Math.min(h-R,y));
+ drawPiece();drawObstacles();
+});
+function init(){
+ const{w,h}=size();x=w*.25;y=h*.5;
+ drawPiece();drawObstacles();controls(true);updateAbilityUI();
+}
+init();
+</script>
+</body>
+</html>

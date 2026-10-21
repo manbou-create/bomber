@@ -1,0 +1,13 @@
+#bottle{
+ position:absolute;
+ left:50%;
+ top:50%;
+ width:58px;
+ height:150px;
+ transform:translate(-50%,-50%);
+ border-radius:20px;
+ border:4px solid #4685a0;
+ background:radial-gradient(circle at 30% 25%,#fff,#8bd5f5 60%,#4685a0);
+ z-index:3;
+ pointer-events:none;
+}
